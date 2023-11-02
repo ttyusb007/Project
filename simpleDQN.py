@@ -57,6 +57,8 @@ class LorenzEnvironment:
         self.state_size = 3 + 603 + 603  # Parameters (sigma, beta, rho) + Observations + Predicted Observations
         self.action_space = action_space
         self.noise_parameters = np.array([1.2, 1.2, 1.2])
+        self.max_steps = 135
+        self.current_step = 0
 
     def step(self, action_idx):
         action = self.action_space[action_idx]
@@ -79,13 +81,21 @@ class LorenzEnvironment:
         # print("next_state shape:", next_state.shape) # DEBUG
         
         parameter_change_penalty = np.sum(np.abs(self.noise_parameters - guessed_noise_params))
-        reward = -mse + self.penalty_factor * parameter_change_penalty
+        reward = -mse # + self.penalty_factor * parameter_change_penalty
         self.noise_parameters = guessed_noise_params
         
-        done = True
+        # Update the step counter
+        self.current_step += 1
+        
+        # Check if we have reached the max number of steps
+        if self.current_step >= self.max_steps:
+            done = True
+        else:
+            done = False
         return next_state, reward, done
     
     def reset(self):
+        self.current_step = 0
         return np.zeros(self.state_size)
 
 env = LorenzEnvironment(uTrue, observations, penalty_factor=0.001)
@@ -148,7 +158,7 @@ batch_size = 32
 
 episode_rewards = []
 
-for episode in range(2000):
+for episode in range(1000):
     state = env.reset()
     done = False
     total_episode_reward = 0
