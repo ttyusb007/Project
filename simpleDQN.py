@@ -3,6 +3,7 @@ import random
 import tensorflow as tf
 from tensorflow import keras
 from collections import deque
+import matplotlib.pyplot as plt
 
 def Lorenz63(state, *args):
     sigma = args[0]
@@ -113,6 +114,7 @@ class DQLAgent:
         self.epsilon_decay = 0.995
         self.learning_rate = 0.001
         self.model = self._build_model()
+        self.losses = []
 
     def _build_model(self):
         model = keras.Sequential()
@@ -149,6 +151,12 @@ class DQLAgent:
             else:
                 q_values[i][action] = reward
 
+        # Train the model using the states and updated Q values
+        # and store the loss value from the training
+        history = self.model.fit(states, q_values, epochs=1, verbose=0)
+        self.losses.append(history.history['loss'][0])
+
+
         self.model.fit(states, q_values, epochs=1, verbose=0)
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
@@ -157,8 +165,10 @@ agent = DQLAgent(state_size, action_size)
 batch_size = 32
 
 episode_rewards = []
+best_guessed_parameters = []
+mse_values = []
 
-for episode in range(1000):
+for episode in range(100):
     state = env.reset()
     done = False
     total_episode_reward = 0
@@ -173,9 +183,39 @@ for episode in range(1000):
             agent.replay(batch_size)
 
     episode_rewards.append(total_episode_reward)
-    if episode % 50 == 0:
+    best_guessed_parameters.append(env.noise_parameters)
+    mse_current = np.mean((env.noise_parameters - np.array([true_sigma_m, true_beta_m, true_rho_m])) ** 2)
+    mse_values.append(mse_current)
+
+
+    if episode % 10 == 0:
         print(f"Episode {episode} - Total Reward: {total_episode_reward}")
 
 best_action_idx = np.argmax(agent.model.predict(np.array([env.reset()])))
 best_noise_parameters = env.noise_parameters
 print("Best guessed noise parameters:", best_noise_parameters)
+
+window_size = 10
+running_avg = np.convolve(episode_rewards, np.ones(window_size)/window_size, mode='valid')
+plt.plot(running_avg)
+plt.xlabel('Episode')
+plt.ylabel('Average Reward')
+plt.title(f'Running Average of Rewards (Window Size: {window_size})')
+plt.grid(True)
+plt.show()
+
+plt.figure() # Create a new figure for the loss plot
+plt.plot(agent.losses)
+plt.xlabel('Training Step')
+plt.ylabel('Loss')
+plt.title('Loss over Training Steps')
+plt.grid(True)
+plt.show()
+
+plt.figure()
+plt.plot(mse_values)
+plt.xlabel('Episode')
+plt.ylabel('MSE')
+plt.title('Mean Squared Error of Guessed Noise Parameters')
+plt.grid(True)
+plt.show()
